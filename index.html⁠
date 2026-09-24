@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Snowball Showdown</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #111;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        #game-container {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            max-width: 100vw;
+            max-height: 100vh;
+            background-color: #70b0e0;
+            border: 4px solid #fff;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            image-rendering: pixelated;
+        }
+
+        /* UI Overlay */
+        .ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 15px;
+        }
+
+        .hud {
+            display: flex;
+            justify-content: space-between;
+            font-size: 20px;
+            font-weight: bold;
+            text-shadow: 2px 2px #000;
+        }
+
+        .hud-item {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 6px 12px;
+            border-radius: 4px;
+            border: 2px solid #fff;
+        }
+
+        /* Screens */
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(10, 20, 40, 0.85);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            pointer-events: auto;
+            gap: 15px;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        h1 {
+            font-size: 42px;
+            margin: 0;
+            color: #aaddff;
+            text-shadow: 4px 4px #000;
+            text-align: center;
+        }
+
+        button {
+            padding: 12px 24px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #fff;
+            background-color: #e74c3c;
+            border: 3px solid #fff;
+            border-radius: 6px;
+            cursor: pointer;
+            text-transform: uppercase;
+            box-shadow: 0 4px #992d22;
+        }
+
+        button:hover {
+            background-color: #ff5e4d;
+        }
+
+        button:active {
+            box-shadow: 0 0 #992d22;
+            transform: translateY(4px);
+        }
+
+        /* Shop Grid */
+        .shop-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            max-height: 320px;
+            overflow-y: auto;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.4);
+            border: 2px solid #555;
+        }
+
+        .shop-item {
+            width: 90px;
+            height: 90px;
+            background: #222;
+            border: 2px solid #888;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 12px;
+            gap: 5px;
+        }
+
+        .shop-item.equipped {
+            border-color: #2ecc71;
+            background: #1e3d2f;
+        }
+
+        .shop-item.owned {
+            border-color: #3498db;
+        }
+
+        .ball-preview {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+        }
+
+        /* Mobile Controls */
+        .controls {
+            position: absolute;
+            bottom: 10px;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 20px;
+            pointer-events: auto;
+        }
+
+        .btn-dodge {
+            width: 90px;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.3);
+            border: 3px solid #fff;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+        }
+
+        @media (max-width: 600px) {
+            .shop-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <canvas id="canvas" width="800" height="600"></canvas>
+
+        <div class="ui-layer">
+            <div class="hud">
+                <div class="hud-item" id="hud-score">SCORE: 0</div>
+                <div class="hud-item" id="hud-combo">STREAK: x0</div>
+                <div class="hud-item" id="hud-coins">COINS: 0</div>
+                <div class="hud-item" id="hud-lives">LIVES: ❤️❤️❤️</div>
+            </div>
+
+            <div class="controls">
+                <button class="btn-dodge" id="btn-dodge-left">◀</button>
+                <button class="btn-dodge" id="btn-dodge-right">▶</button>
+            </div>
+        </div>
+
+        <!-- Start Screen -->
+        <div id="screen-title" class="screen">
+            <h1>SNOWBALL SHOWDOWN</h1>
+            <p>Dodge with [A]/[D] or Left/Right buttons!</p>
+            <p>Tap snowmen to throw snowballs!</p>
+            <button onclick="startGame()">Play Game</button>
+            <button onclick="openShop()" style="background-color: #f39c12; box-shadow: 0 4px #b8730e;">Snowball Shop</button>
+        </div>
+
+        <!-- Shop Screen -->
+        <div id="screen-shop" class="screen hidden">
+            <h1>SNOWBALL SHOP</h1>
+            <div id="shop-coins-display" style="font-weight: bold; font-size: 20px;">COINS: 0</div>
+            <div class="shop-grid" id="shop-grid"></div>
+            <button onclick="closeShop()" style="background-color: #7f8c8d; box-shadow: 0 4px #535c5e;">Back</button>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="screen-gameover" class="screen hidden">
+            <h1>GAME OVER</h1>
+            <p id="final-score">SCORE: 0</p>
+            <p id="coins-earned">COINS EARNED: 0</p>
+            <button onclick="startGame()">Try Again</button>
+            <button onclick="openTitleScreen()" style="background-color: #7f8c8d; box-shadow: 0 4px #535c5e;">Main Menu</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = false;
+
+        // Save Data State
+        let saveData = {
+            coins: 0,
+            ownedBalls: [0],
+            equippedBall: 0
+        };
+
+        function loadGame() {
+            const loaded = localStorage.getItem('snowball_showdown_save');
+            if (loaded) {
+                try {
+                    saveData = JSON.parse(loaded);
+                } catch(e) {}
+            }
+        }
+
+        function saveGame() {
+            localStorage.setItem('snowball_showdown_save', JSON.stringify(saveData));
+        }
+
+        // Cosmetics Definition (20 Snowballs)
+        const SNOWBALL_TYPES = [
+            { id: 0, name: "Classic", cost: 0, color: "#ffffff", border: "#dddddd" },
+            { id: 1, name: "Ice Blue", cost: 50, color: "#70d6ff", border: "#38b6ff" },
+            { id: 2, name: "Coal", cost: 100, color: "#333333", border: "#000000" },
+            { id: 3, name: "Red Apple", cost: 150, color: "#ff4d6d", border: "#c9184a" },
+            { id: 4, name: "Lime Green", cost: 200, color: "#38b000", border: "#007200" },
+            { id: 5, name: "Gold Sparkle", cost: 300, color: "#ffb703", border: "#fb8500" },
+            { id: 6, name: "Bubblegum", cost: 350, color: "#ff70a6", border: "#ff9770" },
+            { id: 7, name: "Purple Dusk", cost: 400, color: "#7052ff", border: "#4c2cbf" },
+            { id: 8, name: "Neon Cyan", cost: 500, color: "#00f5d4", border: "#00bbf9" },
+            { id: 9, name: "Hot Pink", cost: 600, color: "#f72585", border: "#7209b7" },
+            { id: 10, name: "Mudball", cost: 650, color: "#7f5539", border: "#9c6644" },
+            { id: 11, name: "Glacier Blue", cost: 750, color: "#e0fbfc", border: "#98c1d9" },
+            { id: 12, name: "Toxic Slime", cost: 850, color: "#70e000", border: "#38b000" },
+            { id: 13, name: "Magma Orb", cost: 1000, color: "#f77f00", border: "#d62828" },
+            { id: 14, name: "Shadow Orb", cost: 1200, color: "#101010", border: "#404040" },
+            { id: 15, name: "Star Yellow", cost: 1400, color: "#ffee38", border: "#fca311" },
+            { id: 16, name: "Cotton Candy", cost: 1600, color: "#ffc8dd", border: "#bde0fe" },
+            { id: 17, name: "Emerald", cost: 1800, color: "#2a9d8f", border: "#264653" },
+            { id: 18, name: "Amethyst", cost: 2000, color: "#b5179e", border: "#560bad" },
+            { id: 19, name: "Cosmic Glow", cost: 2500, color: "#ffffff", border: "#ff007f", glow: true }
+        ];
+
+        // Game State Variables
+        let state = 'TITLE'; // TITLE, PLAYING, GAMEOVER, SHOP
+        let score = 0;
+        let streak = 0;
+        let lives = 3;
+        let currentMap = 0; // 0, 1, 2
+        let coinsGained = 0;
+
+        // Player Dodge Mechanics
+        let dodgeDir = 0; // -1 Left, 0 Center, 1 Right
+        let isDodgingLeft = false;
+        let isDodgingRight = false;
+
+        // Game Objects
+        let targets = [];
+        let snowballs = [];
+        let particles = [];
+
+        // Map Layout Holes Configuration
+        const MAP_HOLES = [
+            // Map 1: Village
+            [{x: 150, y: 350}, {x: 400, y: 320}, {x: 650, y: 350}, {x: 280, y: 450}, {x: 520, y: 450}],
+            // Map 2: Forest
+            [{x: 120, y: 300}, {x: 300, y: 360}, {x: 500, y: 360}, {x: 680, y: 300}, {x: 400, y: 460}],
+            // Map 3: Glacier
+            [{x: 200, y: 320}, {x: 600, y: 320}, {x: 320, y: 420}, {x: 480, y: 420}, {x: 400, y: 250}]
+        ];
+
+        // Snowman Skins
+        const SNOWMAN_TYPES = ['CLASSIC', 'TOPHAT', 'EARMUFFS', 'BEANIE', 'GOLDEN'];
+
+        class Target {
+            constructor(hole) {
+                this.x = hole.x;
+                this.y = hole.y;
+                this.width = 60;
+                this.height = 80;
+                
+                // Determine cosmetic type
+                const isGolden = Math.random() < 0.03; // Extremely rare 3%
+                if (isGolden) {
+                    this.type = 'GOLDEN';
+                } else {
+                    this.type = SNOWMAN_TYPES[Math.floor(Math.random() * 4)];
+                }
+
+                this.state = 'RISING'; // RISING, IDLE, HIDING, HIDDEN
+                this.popProgress = 0; // 0 to 1
+                this.maxUpTime = Math.max(120 - Math.floor(score / 50), 45); // Gets faster
+                this.timer = 0;
+                this.hasAttacked = false;
+            }
+
+            update() {
+                if (this.state === 'RISING') {
+                    this.popProgress += 0.08;
+                    if (this.popProgress >= 1) {
+                        this.popProgress = 1;
+                        this.state = 'IDLE';
+                    }
+                } else if (this.state === 'IDLE') {
+                    this.timer++;
+                    
+                    // Attack player if stayed up too long
+                    if (this.timer > this.maxUpTime - 20 && !this.hasAttacked) {
+                        this.attackPlayer();
+                        this.hasAttacked = true;
+                    }
+
+                    if (this.timer >= this.maxUpTime) {
+                        this.state = 'HIDING';
+                    }
+                } else if (this.state === 'HIDING') {
+                    this.popProgress -= 0.08;
+                    if (this.popProgress <= 0) {
+                        this.popProgress = 0;
+                        this.state = 'HIDDEN';
+                    }
+                }
+            }
+
+            attackPlayer() {
+                // If player is NOT dodging in correct direction, take damage
+                const attackDir = this.x < 400 ? -1 : 1;
+                
+                // Throw incoming snowball visual particle
+                createIncomingSnowball(this.x, this.y - 40, attackDir);
+
+                setTimeout(() => {
+                    if (dodgeDir === 0 || (attackDir === -1 && dodgeDir !== 1) || (attackDir === 1 && dodgeDir !== -1)) {
+                        takeDamage();
+                    }
+                }, 300);
+            }
+
+            draw() {
+                if (this.state === 'HIDDEN') return;
+
+                const drawY = this.y - (this.height * this.popProgress);
+
+                ctx.save();
+                // Masking hole bottom
+                ctx.beginPath();
+                ctx.rect(this.x - 40, this.y - this.height - 10, 80, this.height + 10);
+                ctx.clip();
+
+                // Draw Snowman Body
+                const isGold = this.type === 'GOLDEN';
+                ctx.fillStyle = isGold ? '#ffe066' : '#ffffff';
+                ctx.strokeStyle = isGold ? '#b8860b' : '#cccccc';
+                ctx.lineWidth = 3;
+
+                // Bottom Ball
+                ctx.beginPath();
+                ctx.arc(this.x, drawY + 50, 28, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                // Head
+                ctx.beginPath();
+                ctx.arc(this.x, drawY + 20, 20, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                // Face (Carrot Nose & Eyes)
+                ctx.fillStyle = '#000';
+                ctx.fillRect(this.x - 7, drawY + 15, 4, 4);
+                ctx.fillRect(this.x + 3, drawY + 15, 4, 4);
+
+                ctx.fillStyle = '#ff6b6b';
+                ctx.beginPath();
+                ctx.triangle ? ctx.triangle(this.x, drawY + 20, this.x + 12, drawY + 22, this.x, drawY + 24) : null;
+                ctx.fillRect(this.x, drawY + 19, 10, 4); // Simple Carrot
+
+                // Cosmetics
+                if (this.type === 'TOPHAT') {
+                    ctx.fillStyle = '#222';
+                    ctx.fillRect(this.x - 16, drawY + 2, 32, 5);
+                    ctx.fillRect(this.x - 10, drawY - 12, 20, 15);
+                } else if (this.type === 'EARMUFFS') {
+                    ctx.fillStyle = '#e74c3c';
+                    ctx.fillRect(this.x - 22, drawY + 12, 6, 12);
+                    ctx.fillRect(this.x + 16, drawY + 12, 6, 12);
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(this.x, drawY + 15, 18, Math.PI, 0);
+                    ctx.stroke();
+                } else if (this.type === 'BEANIE') {
+                    ctx.fillStyle = '#3498db';
+                    ctx.beginPath();
+                    ctx.arc(this.x, drawY + 15, 21, Math.PI, 0);
+                    ctx.fill();
+                    ctx.fillStyle = '#fff';
+                    ctx.fillRect(this.x - 18, drawY + 12, 36, 5);
+                }
+
+                ctx.restore();
+            }
+        }
+
+        // Particle System
+        function createParticles(x, y, color) {
+            for (let i = 0; i < 12; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 8,
+                    vy: (Math.random() - 0.5) * 8,
+                    life: 20,
+                    color: color
+                });
+            }
+        }
+
+        function createIncomingSnowball(startX, startY, dir) {
+            particles.push({
+                incoming: true,
+                x: startX,
+                y: startY,
+                targetX: 400 + (dir * 200),
+                targetY: 600,
+                progress: 0,
+                color: '#fff'
+            });
+        }
+
+        // Start Game
+        function startGame() {
+            loadGame();
+            score = 0;
+            streak = 0;
+            lives = 3;
+            coinsGained = 0;
+            currentMap = Math.floor(Math.random() * 3);
+            targets = [];
+            snowballs = [];
+            particles = [];
+            
+            state = 'PLAYING';
+            hideScreens();
+            updateHUD();
+        }
+
+        function hideScreens() {
+            document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+        }
+
+        function openTitleScreen() {
+            state = 'TITLE';
+            hideScreens();
+            document.getElementById('screen-title').classList.remove('hidden');
+        }
+
+        function openShop() {
+            loadGame();
+            state = 'SHOP';
+            hideScreens();
+            document.getElementById('screen-shop').classList.remove('hidden');
+            renderShop();
+        }
+
+        function closeShop() {
+            openTitleScreen();
+        }
+
+        function renderShop() {
+            document.getElementById('shop-coins-display').innerText = `COINS: ${saveData.coins}`;
+            const grid = document.getElementById('shop-grid');
+            grid.innerHTML = '';
+
+            SNOWBALL_TYPES.forEach(ball => {
+                const isOwned = saveData.ownedBalls.includes(ball.id);
+                const isEquipped = saveData.equippedBall === ball.id;
+
+                const item = document.createElement('div');
+                item.className = `shop-item ${isOwned ? 'owned' : ''} ${isEquipped ? 'equipped' : ''}`;
+                
+                const preview = document.createElement('div');
+                preview.className = 'ball-preview';
+                preview.style.backgroundColor = ball.color;
+                preview.style.border = `3px solid ${ball.border}`;
+
+                item.appendChild(preview);
+
+                const name = document.createElement('span');
+                name.innerText = ball.name;
+                item.appendChild(name);
+
+                const label = document.createElement('span');
+                if (isEquipped) label.innerText = "EQUIPPED";
+                else if (isOwned) label.innerText = "OWNED";
+                else label.innerText = `${ball.cost} C`;
+                item.appendChild(label);
+
+                item.onclick = () => handleShopClick(ball);
+
+                grid.appendChild(item);
+            });
+        }
+
+        function handleShopClick(ball) {
+            const isOwned = saveData.ownedBalls.includes(ball.id);
+
+            if (isOwned) {
+                saveData.equippedBall = ball.id;
+                saveGame();
+                renderShop();
+            } else if (saveData.coins >= ball.cost) {
+                saveData.coins -= ball.cost;
+                saveData.ownedBalls.push(ball.id);
+                saveData.equippedBall = ball.id;
+                saveGame();
+                renderShop();
+            }
+        }
+
+        function takeDamage() {
+            lives--;
+            streak = 0;
+            updateHUD();
+            
+            // Screen Shake Effect
+            canvas.style.transform = "translate(10px, 10px)";
+            setTimeout(() => canvas.style.transform = "translate(-10px, -10px)", 50);
+            setTimeout(() => canvas.style.transform = "translate(0, 0)", 100);
+
+            if (lives <= 0) {
+                gameOver();
+            }
+        }
+
+        function gameOver() {
+            state = 'GAMEOVER';
+            saveData.coins += coinsGained;
+            saveGame();
+
+            document.getElementById('final-score').innerText = `SCORE: ${score}`;
+            document.getElementById('coins-earned').innerText = `COINS EARNED: ${coinsGained}`;
+            hideScreens();
+            document.getElementById('screen-gameover').classList.remove('hidden');
+        }
+
+        function updateHUD() {
+            document.getElementById('hud-score').innerText = `SCORE: ${score}`;
+            document.getElementById('hud-combo').innerText = `STREAK: x${streak}`;
+            document.getElementById('hud-coins').innerText = `COINS: ${saveData.coins + coinsGained}`;
+            
+            let hearts = '';
+            for (let i = 0; i < 3; i++) {
+                hearts += i < lives ? '❤️' : '🖤';
+            }
+            document.getElementById('hud-lives').innerText = `LIVES: ${hearts}`;
+        }
+
+        // Input Handlers
+        window.addEventListener('keydown', e => {
+            if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') isDodgingLeft = true;
+            if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') isDodgingRight = true;
+            updateDodge();
+        });
+
+        window.addEventListener('keyup', e => {
+            if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') isDodgingLeft = false;
+            if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') isDodgingRight = false;
+            updateDodge();
+        });
+
+        // Touch Control Buttons
+        const btnLeft = document.getElementById('btn-dodge-left');
+        const btnRight = document.getElementById('btn-dodge-right');
+
+        btnLeft.addEventListener('touchstart', (e) => { e.preventDefault(); isDodgingLeft = true; updateDodge(); });
+        btnLeft.addEventListener('touchend', (e) => { e.preventDefault(); isDodgingLeft = false; updateDodge(); });
+        btnRight.addEventListener('touchstart', (e) => { e.preventDefault(); isDodgingRight = true; updateDodge(); });
+        btnRight.addEventListener('touchend', (e) => { e.preventDefault(); isDodgingRight = false; updateDodge(); });
+
+        btnLeft.addEventListener('mousedown', () => { isDodgingLeft = true; updateDodge(); });
+        btnLeft.addEventListener('mouseup', () => { isDodgingLeft = false; updateDodge(); });
+        btnRight.addEventListener('mousedown', () => { isDodgingRight = true; updateDodge(); });
+        btnRight.addEventListener('mouseup', () => { isDodgingRight = false; updateDodge(); });
+
+        function updateDodge() {
+            if (isDodgingLeft && !isDodgingRight) dodgeDir = -1;
+            else if (isDodgingRight && !isDodgingLeft) dodgeDir = 1;
+            else dodgeDir = 0;
+        }
+
+        // Canvas Click / Tap to Shoot
+        canvas.addEventListener('pointerdown', e => {
+            if (state !== 'PLAYING') return;
+
+            const rect = canvas.getBoundingClientRect();
+            const clickX = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const clickY = (e.clientY - rect.top) * (canvas.height / rect.height);
+
+            // Check hit against snowmen
+            let hit = false;
+            targets.forEach(target => {
+                if (target.state !== 'HIDDEN') {
+                    const dist = Math.hypot(target.x - clickX, (target.y - 30) - clickY);
+                    if (dist < 40) {
+                        hit = true;
+                        target.state = 'HIDING';
+
+                        // Reward
+                        streak++;
+                        const isGold = target.type === 'GOLDEN';
+                        const points = isGold ? 500 : 100 * Math.min(streak, 5);
+                        const coins = isGold ? 50 : 5;
+
+                        score += points;
+                        coinsGained += coins;
+
+                        const ballCosmetic = SNOWBALL_TYPES[saveData.equippedBall];
+                        createParticles(target.x, target.y - 30, ballCosmetic.color);
+                    }
+                }
+            });
+
+            if (!hit) {
+                streak = 0; // Reset streak on miss
+            }
+            updateHUD();
+        });
+
+        // Main Game Loop
+        function loop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (state === 'PLAYING') {
+                // Background Rendering
+                drawBackground();
+
+                // Target Spawning logic
+                const activeHoles = MAP_HOLES[currentMap];
+                if (targets.length < 3 && Math.random() < 0.03) {
+                    const randomHole = activeHoles[Math.floor(Math.random() * activeHoles.length)];
+                    // Ensure no overlap at same hole
+                    if (!targets.some(t => t.x === randomHole.x && t.y === randomHole.y && t.state !== 'HIDDEN')) {
+                        targets.push(new Target(randomHole));
+                    }
+                }
+
+                // Update & Draw Targets
+                targets.forEach(t => t.update());
+                targets.forEach(t => t.draw());
+                targets = targets.filter(t => t.state !== 'HIDDEN');
+
+                // Update & Draw Particles
+                for (let i = particles.length - 1; i >= 0; i--) {
+                    let p = particles[i];
+                    if (p.incoming) {
+                        p.progress += 0.05;
+                        const currentX = p.x + (p.targetX - p.x) * p.progress;
+                        const currentY = p.y + (p.targetY - p.y) * p.progress;
+
+                        ctx.fillStyle = p.color;
+                        ctx.beginPath();
+                        ctx.arc(currentX, currentY, 8 + p.progress * 12, 0, Math.PI * 2);
+                        ctx.fill();
+
+                        if (p.progress >= 1) particles.splice(i, 1);
+                    } else {
+                        p.x += p.vx;
+                        p.y += p.vy;
+                        p.life--;
+
+                        ctx.fillStyle = p.color;
+                        ctx.fillRect(p.x, p.y, 4, 4);
+
+                        if (p.life <= 0) particles.splice(i, 1);
+                    }
+                }
+
+                // Draw First Person Camera / Dodge Effect
+                drawFirstPersonPerspective();
+            }
+
+            requestAnimationFrame(loop);
+        }
+
+        function drawBackground() {
+            // Sky & Snowfield Colors based on Map
+            if (currentMap === 0) {
+                ctx.fillStyle = '#a2d2ff'; ctx.fillRect(0, 0, 800, 300);
+                ctx.fillStyle = '#e1f1fd'; ctx.fillRect(0, 300, 800, 300);
+            } else if (currentMap === 1) {
+                ctx.fillStyle = '#b8c0ff'; ctx.fillRect(0, 0, 800, 280);
+                ctx.fillStyle = '#d8e2dc'; ctx.fillRect(0, 280, 800, 320);
+            } else {
+                ctx.fillStyle = '#8eecf5'; ctx.fillRect(0, 0, 800, 250);
+                ctx.fillStyle = '#98f5e1'; ctx.fillRect(0, 250, 800, 350);
+            }
+
+            // Draw Holes
+            ctx.fillStyle = '#2b2d42';
+            MAP_HOLES[currentMap].forEach(hole => {
+                ctx.beginPath();
+                ctx.ellipse(hole.x, hole.y, 35, 12, 0, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        function drawFirstPersonPerspective() {
+            ctx.save();
+
+            // Head tilting/dodging camera effect
+            if (dodgeDir === -1) {
+                ctx.translate(80, 20);
+                ctx.rotate(0.08);
+            } else if (dodgeDir === 1) {
+                ctx.translate(-80, 20);
+                ctx.rotate(-0.08);
+            }
+
+            // Foreground Snow Barrier
+            ctx.fillStyle = '#ffffff';
+            ctx.strokeStyle = '#cccccc';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.arc(400, 750, 420, Math.PI, 0);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        // Initialize Application
+        loadGame();
+        loop();
+    </script>
+</body>
+</html>
